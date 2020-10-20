@@ -1,0 +1,165 @@
+---
+title: "Berry project"
+author: "Lin Zhou"
+date: "2020/10/17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##  Berries EDA report
+In this report, I am going to do the exploratoary data analysis about "berries" dataset. These data were collected from the USDA database selector which can be found on https://quickstats.nass.usda.gov The data were stored online and then downloaded as a CSV file.Data selected from the NASS database often has columns without any data or with a single repeated Values. I am going to clean the data and show the meaningful values of variables under each columns.
+
+##  Data cleaning
+First, let's start with a few packages which would be used in the following data cleaning and visualization process.
+```{r}
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(magrittr)
+library(stringr)
+library(funModeling)
+library(Hmisc)
+```
+
+After importing the "berries" dataset, I would like to check the distinction of the values under each column. Since many of the columns have only NA and single repeated value which can not make any sense when doing the data analysis, I would like to remove them from the dataset.
+```{r}
+berries <- read.csv("berries.csv")
+num_value <- berries%>%summarize_all(n_distinct)
+select_col <- num_value[which(num_value[1,]==1)]
+index_col <- which(num_value[1,] == 1)
+berries[,c(1,4,5,8,9,10,11,12,13,14,15,21)]
+```
+
+Then I would like to check whether every column is well split in the dataset, which means each column would only represent one variable. Atfer looking through the data, I found that there are 3 columns contain more than one variables which are column(Data.Item, Domain, Domain.Category). I used the separate function to split the columns into 2 or 3 colmuns in order to make the data clear and easy to understand. After the separation, the column "component" and column "agentia" represent exactly the same value, thus I would like to include one of them into the following dataset.
+```{r}
+berries$Data.Item <- gsub("[()]", "", berries$Data.Item)
+new <- separate(berries, col = Data.Item, into = c("berry","type", "data_type", "unit"), sep = ",")
+new$Domain <- gsub("[()]", "", new$Domain)
+new1 <- separate(new, col = Domain, into = c("component","agent type"), sep = ",")
+head(berries)
+new1$Domain.Category <- gsub("[()]", "", new1$Domain.Category)
+new2 <- separate(new1, col = Domain.Category, into = c("agentia","compound"), sep = ",")
+head(new2)
+```
+
+Then I want to look into specific type of berry and acquire the information about it. Let blueberry dataset as an example. First and foremost, I extract blueberry dataset from the whole dataset and recheck every values are meaningful and in the right place. After checking the positions of values under each column, I found some of values under columns (type, data_type, unit) are not in the right place. As a result, I create two for loops to adjust them into right rail. Since if there is stirng "MEASURED" appearing under "type" column, the unit column would be "NA", we need firstly adjust the values under "type" column, and then "unit" column. Also, if there is string "MEASURED" appearing under "unit" column, I need to not only tranfer the value from unit to data_type, but also combine former data_type value to type value. Thus, before I tranfer the value from unit column, I would like to set a temp column to store the value of data_type value.
+```{r}
+bberry_index <- which(new2[,16] == "BLUEBERRIES")
+bberry <- new2[bberry_index,]
+unique(bberry$data_type)
+unique(bberry$unit)
+bberry[is.na(bberry)]= "NA"
+for (i in 1:length(bberry$type)){
+  if(str_detect(bberry$type[i], "MEASURED")){
+    bberry$data_type[i] = bberry$type[i]
+    bberry$type[i] = "NA"
+  }
+}
+bberry$btemp <- ""
+for (i in 1:length(bberry$Year)){
+  if(str_detect(bberry$unit[i], "MEASURED")){
+    bberry$btemp[i] = bberry$data_type[i]
+    bberry$data_type[i] = bberry$unit[i]
+    bberry$unit[i] = "NA"
+  }
+}
+bberry$type = cbind(bberry$type,bberry$btemp)
+```
+
+Then, I do the same thing on raspberry and strawberry dataset.
+```{r}
+sberry_index <- which(new2[,16] == "STRAWBERRIES")
+sberry <- new2[sberry_index,]
+unique(sberry$data_type)
+unique(sberry$unit)
+sberry[is.na(sberry)]= "NA"
+for (i in 1:length(sberry$type)){
+  if(str_detect(sberry$type[i], "MEASURED")){
+    sberry$data_type[i] = sberry$type[i]
+    sberry$type[i] = "NA"
+  }
+}
+sberry$stemp <- ""
+for (i in 1:length(sberry$Year)){
+  if(str_detect(sberry$unit[i], "MEASURED")){
+    sberry$stemp[i] = sberry$data_type[i]
+    sberry$data_type[i] = sberry$unit[i]
+    sberry$unit[i] = "NA"
+  }
+}
+sberry$type = cbind(sberry$type,sberry$stemp)
+
+
+rberry_index <- which(new2[,16] == "RASPBERRIES")
+rberry <- new2[rberry_index,]
+unique(rberry$type)
+unique(rberry$data_type)
+unique(rberry$unit)
+rberry[is.na(rberry)]= "NA"
+for (i in 1:length(rberry$type)){
+  if(str_detect(rberry$type[i], "MEASURED")){
+    rberry$data_type[i] = rberry$type[i]
+    rberry$type[i] = "NA"
+  }
+}
+rberry$rtemp <- ""
+for (i in 1:length(rberry$Year)){
+  if(str_detect(rberry$unit[i], "MEASURED")){
+    rberry$rtemp[i] = rberry$data_type[i]
+    rberry$data_type[i] = rberry$unit[i]
+    rberry$unit[i] = "NA"
+  }
+}
+rberry$type = cbind(rberry$type,rberry$rtemp)
+```
+
+##  Data visualization
+After I clean the data, I would like to choose specific dataset (strawberry dataset) to analyze. There are often 4 steps about EDA: 1.Acquire and understand the dataset. 2.Analyze the categorical variable. 3. Analyze the numeric variable. 4.Analyze these two types of variables at the same time. Keypoints needed to be paied attention to in EDA: data_type, outliers, NA, distributions. In the first step, I use the glimpse function to get to know the numbers of observations and first a few lines of the data. Then the df_status function would return a table contains information about the number of NA or unique value of each column. The fre function would return frequencies of all string and factor variables in the dataset and shows as histograms. And the plot_num function would deal with the numerical variables in the dataset which can show the distribution of values.
+```{r}
+index_ana <- c(2,6,17,18,19,20,23,24,25)
+
+s_ana <- sberry[,index_ana]
+basic_eda <- function(data){
+
+  glimpse(data)
+
+  df_status(data)
+
+  freq(data) 
+
+  profiling_num(data)
+
+  plot_num(data)
+
+}
+
+basic_eda(s_ana)
+```
+
+Then I would like to move to principal components analysis part. This would lower the dimensions of model and change the mutilple index into comprehensive index, which makes the model easy to handle.
+```{r}
+##pcaberry <- prcomp(s_ana, center = T, scale. = T)
+##summary(pcaberry, center = T, scale. = T)
+##plot(pcaberry, type = "line")
+##biplot(pcaberry, scale = 0)
+
+```
+
+Also, we can divide the dataset depending on different variables like "tame", "wild".
+```{r}
+index_tame <- grep("TAME", new2$type)
+new_tame <- new2[index_tame,]
+unique(new_tame$type)
+index_wild <- grep("WILD", new2$type)
+new_wild <- new2[index_wild,] 
+```
+
+##  Reference
+https://www.tidyverse.org/packages/
+https://www.rdocumentation.org/packages/dplyr/versions/0.7.8
+https://cran.r-project.org/web/packages/magrittr/vignettes/magrittr.html
+https://cran.r-project.org/web/packages/funModeling/index.html
+https://cran.r-project.org/web/packages/Hmisc/index.html
